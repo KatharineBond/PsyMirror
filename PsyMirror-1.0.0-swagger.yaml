@@ -1,0 +1,1150 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: 'PsyMirror'
+  description: 'API для сервиса PsyMirror'
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Личный кабинет
+      summary: Регистрация пользователя
+      description: Позволяет зарегистрироваться Испытуемому или Исследователю
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/RegisterSubject'
+                - $ref: '#/components/schemas/RegisterResearcher'
+            examples:
+              subject:
+                summary: Испытуемый
+                value:
+                  role: "subject"
+                  name: "Иван"
+                  email: "ivan@example.com"
+                  gender: "male"
+                  birthDate: "1998-04-25"
+                  code: 123456
+                  termsAccepted: true
+              researcher:
+                summary: Исследователь
+                value:
+                  role: "researcher"
+                  name: "Анна"
+                  surname: "Кузнецова"
+                  email: "anna@example.com"
+                  gender: "female"
+                  birthDate: "1985-06-01"
+                  experience: 10
+                  educationCount: 2
+                  coursesCount: 3
+                  specializations: ["Клиническая психология"]
+                  about: "Специалист по когнитивной терапии"
+                  experienceFiles: ["exp1.pdf"]
+                  educationFiles: ["edu1.pdf", "edu2.pdf"]
+                  coursesFiles: ["course1.pdf", "course2.pdf", "course3.pdf"]
+                  profilePhoto: "photo.jpg"
+                  code: 654321
+                  termsAccepted: true
+      responses:
+        "201":
+          description: Пользователь успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  userId:
+                    type: integer
+              example:
+                message: "Регистрация успешна"
+                userId: 123
+        "400":
+          description: Ошибка ввода данных
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              examples:
+                emailExists:
+                  summary: Почта уже существует
+                  value:
+                    code: 400
+                    message: "Пользователь с таким email уже зарегистрирован"
+                invalidCode:
+                  summary: Неверный код подтверждения
+                  value:
+                    code: 400
+                    message: "Неверный код подтверждения"
+        "429":
+          description: Слишком частая отправка кода подтверждения
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 429
+                message: "Повторная отправка кода возможна не чаще, чем раз в минуту"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Произошла ошибка при регистрации"
+                
+  /auth/login/request-code:
+    post:
+      tags:
+        - Личный кабинет
+      summary: Запрос кода подтверждения для входа
+      description: Отправляет шестизначный код на указанный email. Повторная отправка доступна не чаще, чем раз в минуту.
+      operationId: requestLoginCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+            example:
+              email: "user@example.com"
+      responses:
+        "200":
+          description: Код успешно отправлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Код отправлен на указанный email"
+        "404":
+          description: Пользователь с таким email не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "Пользователь не найден"
+        "429":
+          description: Слишком частая отправка кода
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 429
+                message: "Повторная отправка кода возможна не чаще, чем раз в минуту"
+        "500":
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 500
+                  message:
+                    type: string
+                    example: "Внутренняя ошибка сервера"
+                    
+  /auth/login:
+    post:
+      tags:
+        - Личный кабинет
+      summary: Вход в систему по email и коду
+      description: Позволяет авторизоваться, введя email и код, полученный на почту. Возвращает JWT токен и информацию о пользователе.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - code
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: integer
+                  minLength: 6
+                  maxLength: 6
+                  pattern: "^[0-9]{6}$"
+            example:
+              email: "user@example.com"
+              code: 123456
+      responses:
+        "200":
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT токен
+                  user:
+                    type: object
+                    properties:
+                      userId:
+                        type: integer
+                      role:
+                        type: string
+                        enum: [subject, researcher, admin]
+                      name:
+                        type: string
+                      email:
+                        type: string
+              example:
+                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+                user:
+                  userId: 123
+                  role: "subject"
+                  name: "Иван"
+                  email: "user@example.com"
+        "400":
+          description: Неверный код подтверждения
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 400
+                message: "Неверный код подтверждения"
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "Пользователь не найден"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 500
+                  message:
+                    type: string
+                    example: "Ошибка при попытке входа"
+                    
+  /users/{userId}:
+    patch:
+      tags:
+        - Личный кабинет
+      summary: Обновление профиля пользователя
+      description: Позволяет зарегистрированному пользователю редактировать доступные поля своего профиля.
+      operationId: updateUserProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/UpdateSubjectProfile'
+                - $ref: '#/components/schemas/UpdateResearcherProfile'
+            examples:
+              subject:
+                summary: Обновление профиля Испытуемого
+                value:
+                  email: "subject_updated@example.com"
+                  gender: "other"
+                  birthDate: "2003-09-12"
+              researcher:
+                summary: Обновление профиля Исследователя
+                value:
+                  email: "researcher_updated@example.com"
+                  bankAccount: "BY99UNBS301200000000Z00TEST"
+                  profilePhoto: "photo3.jpg"
+      responses:
+        "200":
+          description: Изменения успешно сохранены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Изменения сохранены"
+        "400":
+          description: Неверный формат или недопустимое поле
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 400
+                message: "Некорректное значение email"
+        "403":
+          description: Недоступные для изменения поля
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 403
+                message: "Изменение этих данных доступно только через администратора"
+        "401":
+          description: Неавторизованный пользователь
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 401
+                message: "Требуется авторизация"
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 404
+                message: "Пользователь с указанным ID не найден"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Ошибка при обновлении профиля"
+                
+    delete:
+      tags:
+        - Личный кабинет
+      summary: Удаление личного кабинета
+      description: Удаляет аккаунт пользователя после подтверждения.
+      operationId: deleteAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя
+          schema:
+            type: integer
+        - name: confirm
+          in: query
+          required: true
+          description: Явное подтверждение удаления
+          schema:
+            type: boolean
+            example: true
+      responses:
+        "200":
+          description: Аккаунт помечен на удаление
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Ваш аккаунт будет полностью удалён через 1 год"
+        "400":
+          description: Подтверждение не предоставлено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 400
+                message: "Требуется подтверждение удаления (?confirm=true)"
+        "401":
+          description: Неавторизованный пользователь
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "Требуется авторизация"
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 404
+                message: "Пользователь с указанным ID не найден"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Ошибка при удалении аккаунта"
+                
+  /auth/logout:
+    post:
+      tags:
+        - Личный кабинет
+      summary: Выход из личного кабинета
+      description: Клиент удаляет JWT токен и считается вышедшим.
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Успешный выход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Выход выполнен"
+        "401":
+          description: Пользователь не авторизован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "Пользователь не авторизован"
+        "500":
+          description: Непредвиденная ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Произошла ошибка"
+                
+  /users/{userId}/tests/completed:
+    get:
+      tags:
+        - Мои тесты
+      summary: Получение списка пройденных тестов
+      description: Возвращает список тестов, которые пользователь прошёл или начал проходить, с фильтрацией и сортировкой.
+      operationId: getCompletedTests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: range
+          in: query
+          description: Диапазон отображаемых тестов
+          schema:
+            type: string
+            enum: [month, year, all]
+            default: month
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [date, name]
+            default: date
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [date, name]
+            default: date
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: Список пройденных тестов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testId:
+                          type: integer
+                        name:
+                          type: string
+                        completedAt:
+                          type: string
+                          format: date-time
+                        completion:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+              example:
+                tests:
+                  - testId: 12
+                    name: "Тест Айзенка"
+                    completedAt: "2025-04-10T14:20:00Z"
+                    completion: 100
+        "500":
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Произошла ошибка"
+                
+  /users/{userId}/tests/completed/{testId}:
+    delete:
+      tags:
+        - Мои тесты
+      summary: Удаление записи о пройденном тесте
+      description: Безвозвратно удаляет запись о прохождении теста.
+      operationId: deleteCompletedTest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: testId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Запись успешно удалена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Запись удалена"
+        "404":
+          description: Запись не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 404
+                message: "Запись не найдена с указанным ID не найдена"
+        "500":
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Произошла ошибка"
+                
+  /users/{userId}/tests/proposed:
+    get:
+      tags:
+        - Мои тесты
+      summary: Получение списка предложенных тестов
+      description: Возвращает список тестов, созданных и предложенных Исследователем.
+      operationId: getProposedTests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testId:
+                          type: integer
+                        name:
+                          type: string
+                        updatedAt:
+                          type: string
+                          format: date-time
+                        status:
+                          type: string
+                          enum: [НаРассмотрении, Принят, Отклонён]
+                        access:
+                          type: string
+                          enum: [Общий, Ограниченный]
+              example:
+                tests:
+                  - testId: 1
+                    name: "Тест на креативность"
+                    updatedAt: "2025-04-11T13:00:00Z"
+                    status: "Принят"
+                    access: "Общий"
+        "500":
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Произошла ошибка"
+                
+  /users/{userId}/tests/proposed/{testId}:
+    patch:
+      tags:
+        - Мои тесты
+      summary: Обновление предложенного теста
+      description: Позволяет исследователю обновить информацию о предложенном тесте до его публикации. Если тест уже принят, доступно изменение только поля доступа.
+      operationId: updateProposedTest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Идентификатор исследователя
+          schema:
+            type: integer
+        - name: testId
+          in: path
+          required: true
+          description: Идентификатор теста
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Название теста
+                author:
+                  type: string
+                  description: Автор теста
+                literature:
+                  type: string
+                  description: Литература
+                links:
+                  type: string
+                  description: Ссылки
+                instruction:
+                  type: string
+                  description: Инстукция
+                comment:
+                  type: string
+                  description: Комментарий
+                access:
+                  type: string
+                  enum: [Публичный, Приватный, Только по ссылке]
+                  description: Вид доступа к тесту
+                description:
+                  type: string
+                  description: Описание теста
+              example:
+                name: "Опросник профессионального выгорания"
+                access: "Ограниченный"
+                description: "Методика для оценки уровня эмоционального выгорания"
+      responses:
+        "200":
+          description: Тест успешно обновлён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              example:
+                message: "Методика обновлена"
+        "400":
+          description: Некорректные данные в запросе
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "Нельзя изменить название опубликованной методики"
+        "404":
+          description: Тест не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 404
+                  message:
+                    type: string
+                    example: "Тест не найден"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Ошибка при обновлении теста"              
+                
+  /users/{userId}/tests/received:
+    get:
+      tags:
+        - Мои тесты
+      summary: Получение списка полученных тестов
+      description: Тесты, отправленные исследователю испытуемыми.
+      operationId: getReceivedTests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [date, name, sender]
+            default: date
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [date, name, sender]
+            default: date
+      responses:
+        "200":
+          description: Список полученных тестов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testId:
+                          type: string
+                        name:
+                          type: string
+                        receivedAt:
+                          type: string
+                          format: date-time
+                        sender:
+                          type: string
+              example:
+                tests:
+                  - testId: 123
+                    name: "Опросник Люшера"
+                    receivedAt: "2025-04-10T10:00:00Z"
+                    sender: "ivan@example.com"
+        "500":
+          description: Ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+              example:
+                code: 500
+                message: "Произошла ошибка"
+                
+  /users/{userId}/tests/received/export:
+    get:
+      tags:
+        - Мои тесты
+      summary: Экспорт полученных результатов тестов
+      description: Позволяет Исследователю выгрузить выбранные результаты полученных тестов в формате CSV
+      operationId: exportReceivedTests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Идентификатор исследователя
+          schema:
+            type: integer
+        - name: resultIds
+          in: query
+          required: true
+          description: Список ID результатов тестов для выгрузки
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: false
+          example: [123, 124, 128]
+      responses:
+        "200":
+          description: CSV-файл с выбранными результатами тестов
+          content:
+            csv:
+              schema:
+                type: string
+              example: |
+                subjectId,date,testName,answers,scaleScores,interpretation
+                1001,2025-04-10 10:00:00,Опросник Бека",[2, 0, 1, 3],12,"Умеренная депрессия"
+                1002,2025-04-10 09:46:00,"Тест Айзенка",[1, 1, 0, 2],8,"Стабильное эмоциональное состояние"
+        "400":
+          description: Некорректный запрос (например, отсутствует параметр resultIds)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "Не указаны результаты для выгрузки"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 500
+                  message:
+                    type: string
+                    example: "Ошибка при формировании файла"
+  
+  
+
+
+
+
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterSubject:
+      type: object
+      required:
+        - role
+        - name
+        - email
+        - code
+        - termsAccepted
+      properties:
+        role:
+          type: string
+          enum: [subject]
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        gender:
+          type: string
+          enum: [male, female, other]
+        birthDate:
+          type: string
+          format: date
+        code:
+          type: string
+          description: Шестизначный код подтверждения
+        termsAccepted:
+          type: boolean
+          
+    RegisterResearcher:
+      type: object
+      required:
+        - role
+        - name
+        - surname
+        - email
+        - gender
+        - birthDate
+        - experience
+        - educationCount
+        - coursesCount
+        - specializations
+        - about
+        - experienceFiles
+        - educationFiles
+        - coursesFiles
+        - profilePhoto
+        - code
+        - termsAccepted
+      properties:
+        role:
+          type: string
+          enum: [researcher]
+        name:
+          type: string
+        surname:
+          type: string
+        email:
+          type: string
+          format: email
+        gender:
+          type: string
+          enum: [male, female]
+        birthDate:
+          type: string
+          format: date
+        experience:
+          type: integer
+        educationCount:
+          type: integer
+        coursesCount:
+          type: integer
+        specializations:
+          type: array
+          items:
+            type: string
+        about:
+          type: string
+        experienceFiles:
+          type: array
+          items:
+            type: string
+        educationFiles:
+          type: array
+          items:
+            type: string
+        coursesFiles:
+          type: array
+          items:
+            type: string
+        profilePhoto:
+          type: string
+        code:
+          type: string
+        termsAccepted:
+          type: boolean
+          
+    UpdateSubjectProfile:
+        type: object
+        properties:
+          email:
+            type: string
+            format: email
+          gender:
+            type: string
+            enum: [male, female, other]
+          birthDate:
+            type: string
+            format: date
+        additionalProperties: false
+
+    UpdateResearcherProfile:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        bankAccount:
+          type: string
+          description: Банковский счёт
+        profilePhoto:
+          type: string
+          description: Имя или путь к загруженному изображению
+      additionalProperties: false
+  
+servers:
+  # Added by API Auto Mocking Plugin
+  # Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/BONDKATYA1627_1/PsyMirror/1.0.0
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/cottoffeus/PsyMirror/1
